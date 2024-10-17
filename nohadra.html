@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Page</title>
+    <script src="https://www.gstatic.com/firebasejs/10.3.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.3.0/firebase-firestore.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .section {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .item-list img {
+            width: 50px;
+            height: 50px;
+        }
+        .search-container {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Manager Page</h2>
+    <input type="text" id="sectionName" placeholder="Enter section name" />
+    <button onclick="addSection()">Add Section</button>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Search for item name..." />
+        <button onclick="searchItems()">Search</button>
+    </div>
+
+    <div class="section-list" id="sectionList">
+        <!-- Sections will be dynamically added here -->
+    </div>
+</div>
+
+<script>
+    // Firebase configuration and initialization
+    const firebaseConfig = {
+        apiKey: "AIzaSyCfkSremk6hKtRJZHaHevFXkU92PN_NzSo",
+        authDomain: "tests-befe6.firebaseapp.com",
+        projectId: "tests-befe6",
+        storageBucket: "tests-befe6.appspot.com",
+        messagingSenderId: "73110723538",
+        appId: "1:73110723538:web:d43860e688c8745db3460b"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore(app);
+
+    // Function to add a section to Firestore
+    function addSection() {
+        const sectionName = document.getElementById('sectionName').value;
+        if (sectionName) {
+            const section = { sectionName, items: [] };
+
+            // Add the section to Firestore
+            db.collection('sections').add(section)
+                .then((docRef) => {
+                    console.log('Section added with ID: ', docRef.id);
+                    renderSections(); // Re-render sections
+                    document.getElementById('sectionName').value = ''; // Clear input
+                })
+                .catch((error) => {
+                    console.error('Error adding section: ', error);
+                });
+        } else {
+            alert('Please enter a section name!');
+        }
+    }
+
+    // Function to add an item to a section in Firestore
+    function addItem(sectionId) {
+        const itemName = document.getElementById(`itemName_${sectionId}`).value;
+
+        if (!itemName) {
+            alert('Please enter an item name!');
+            return;
+        }
+
+        const itemAddress = document.getElementById(`itemAddress_${sectionId}`).value || '';
+        const itemUrl = document.getElementById(`itemUrl_${sectionId}`).value || '';
+        const itemImage = document.getElementById(`itemImage_${sectionId}`).files[0];
+        const itemDate = document.getElementById(`itemDate_${sectionId}`).value || '';
+        const itemPhone = document.getElementById(`itemPhone_${sectionId}`).value || '';
+
+        let item = { name: itemName, address: itemAddress, url: itemUrl, image: '', date: itemDate, phone: itemPhone };
+
+        if (itemImage) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                item.image = e.target.result;
+                updateItemInFirestore(sectionId, item);
+            };
+            reader.readAsDataURL(itemImage);
+        } else {
+            updateItemInFirestore(sectionId, item);
+        }
+    }
+
+    // Update item in Firestore
+    function updateItemInFirestore(sectionId, item) {
+        db.collection('sections').doc(sectionId).update({
+            items: firebase.firestore.FieldValue.arrayUnion(item)
+        })
+        .then(() => {
+            console.log('Item added');
+            renderSections();
+        })
+        .catch((error) => {
+            console.error('Error adding item: ', error);
+        });
+    }
+
+    // Delete an item from a section
+    function deleteItem(sectionId, item) {
+        db.collection('sections').doc(sectionId).update({
+            items: firebase.firestore.FieldValue.arrayRemove(item)
+        })
+        .then(() => {
+            console.log('Item removed');
+            renderSections();
+        })
+        .catch((error) => {
+            console.error('Error deleting item: ', error);
+        });
+    }
+
+    // Delete an entire section
+    function deleteSection(sectionId) {
+        db.collection('sections').doc(sectionId).delete()
+        .then(() => {
+            console.log('Section deleted');
+            renderSections();
+        })
+        .catch((error) => {
+            console.error('Error deleting section: ', error);
+        });
+    }
+
+    // Function to render sections from Firestore
+    function renderSections(searchTerm = '') {
+        const sectionList = document.getElementById('sectionList');
+        sectionList.innerHTML = '';
+
+        db.collection('sections').get().then((querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+                const section = doc.data();
+                const sectionId = doc.id;
+
+                const sectionDiv = document.createElement('div');
+                sectionDiv.classList.add('section');
+
+                const sectionHeader = document.createElement('div');
+                sectionHeader.classList.add('section-header');
+
+                const sectionTitle = document.createElement('h3');
+                sectionTitle.textContent = section.sectionName;
+                sectionHeader.appendChild(sectionTitle);
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete Section';
+                deleteButton.onclick = () => deleteSection(sectionId);
+                sectionHeader.appendChild(deleteButton);
+
+                sectionDiv.appendChild(sectionHeader);
+
+                const itemForm = document.createElement('div');
+                itemForm.innerHTML = `
+                    <input type="text" id="itemName_${sectionId}" placeholder="Item Name" />
+                    <input type="text" id="itemAddress_${sectionId}" placeholder="Item Address" />
+                    <input type="url" id="itemUrl_${sectionId}" placeholder="Item URL" />
+                    <input type="file" id="itemImage_${sectionId}" />
+                    <input type="date" id="itemDate_${sectionId}" />
+                    <input type="text" id="itemPhone_${sectionId}" placeholder="Item Phone Number" />
+                    <button onclick="addItem('${sectionId}')">Add Item</button>
+                `;
+                sectionDiv.appendChild(itemForm);
+
+                const itemListDiv = document.createElement('div');
+                itemListDiv.classList.add('item-list');
+                section.items.forEach((item) => {
+                    if (searchTerm === '' || item.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.innerHTML = `
+                            <span>${item.name}</span>
+                            <span>${item.address}</span>
+                            <span>${item.url}</span>
+                            <span>${item.date}</span>
+                            <span>${item.phone}</span>
+                            ${item.image ? `<img src="${item.image}" alt="${item.name}" />` : ''}
+                            <button onclick="deleteItem('${sectionId}', ${JSON.stringify(item)})">Delete</button>
+                        `;
+                        itemListDiv.appendChild(itemDiv);
+                    }
+                });
+
+                sectionDiv.appendChild(itemListDiv);
+                sectionList.appendChild(sectionDiv);
+            });
+        });
+    }
+
+    window.onload = function () {
+        renderSections();
+    };
+
+    function searchItems() {
+        const searchTerm = document.getElementById('searchInput').value;
+        renderSections(searchTerm);
+    }
+</script>
+
+</body>
+</html>
